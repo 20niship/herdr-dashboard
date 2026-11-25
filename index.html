@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<title>herdr</title>
+<style>
+:root { color-scheme: dark; --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --fg:#e4e6eb; --dim:#8b93a1; --accent:#5b9dff; }
+:root[data-theme=light] { color-scheme: light; --bg:#f6f7f9; --panel:#fff; --line:#dde0e6; --fg:#1c1f26; --dim:#667080; --accent:#1463d6; }
+* { box-sizing: border-box; }
+body { margin:0; height:100dvh; display:grid; grid-template-columns:280px minmax(0,1fr); grid-template-rows:minmax(0,1fr);
+  background:var(--bg); color:var(--fg); font:14px/1.5 system-ui, sans-serif; }
+button, input { font:inherit; color:inherit; background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:6px 10px; }
+button { cursor:pointer; } button.on { border-color:var(--accent); color:var(--accent); }
+a { color:var(--accent); overflow-wrap:anywhere; }
+nav { overflow:auto; border-right:1px solid var(--line); padding:8px; }
+nav header { display:flex; justify-content:space-between; align-items:center; }
+h2 { font-size:12px; color:var(--dim); margin:14px 4px 4px; }
+#urls div { margin:0 4px; }
+.pane { display:block; width:100%; text-align:left; margin-bottom:4px; }
+.pane small { display:block; color:var(--dim); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.pane div { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--dim); margin-right:6px; }
+.working,.running { background:#e5a50a; } .blocked,.failed { background:#e5484d; } .idle,.done,.completed { background:#30a46c; }
+main { display:flex; flex-direction:column; min-width:0; min-height:0; }
+.bar { display:flex; gap:6px; padding:6px 8px; align-items:center; border-bottom:1px solid var(--line); }
+#title { flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+#back { display:none; }
+.view { flex:1; min-height:0; overflow:auto; }
+#term { margin:0; padding:8px; background:#0b0c0f; color:#d6d9df; font:12px/1.35 ui-monospace, Menlo, Consolas, monospace; white-space:pre; }
+#term.wrap { white-space:pre-wrap; overflow-wrap:anywhere; }
+#term:focus { outline:2px solid var(--accent); outline-offset:-2px; }
+.row { display:flex; gap:8px; align-items:baseline; padding:8px 12px; border-bottom:1px solid var(--line); }
+.row span:nth-child(2) { flex:1; overflow-wrap:anywhere; }
+.row small { color:var(--dim); white-space:nowrap; }
+#keys { display:flex; gap:4px; overflow-x:auto; padding:6px 8px 0; flex-shrink:0; }
+#keys button { min-width:40px; white-space:nowrap; flex-shrink:0; }
+form { display:flex; gap:6px; padding:6px 8px calc(6px + env(safe-area-inset-bottom)); }
+form input { flex:1; min-width:0; font-size:16px; }
+#err { color:#e5484d; padding:0 8px; }
+[hidden] { display:none !important; }
+@media (max-width:700px) {
+  body { grid-template-columns:minmax(0,1fr); }
+  nav { border:0; }
+  body:not(.open) main, body.open nav { display:none; }
+  #back { display:block; }
+  .bar { flex-wrap:wrap; } #title { flex-basis:60%; }
+}
+</style>
+</head>
+<body>
+<nav>
+  <header><strong>herdr</strong><button id="theme" aria-label="テーマ切替">◐</button></header>
+  <div id="list"></div>
+  <div id="urls"></div>
+</nav>
+<main>
+  <div class="bar">
+    <button id="back" aria-label="一覧へ戻る">←</button>
+    <span id="title">pane を選択</span>
+    <button data-tab="term" class="on">端末</button>
+    <button data-tab="tasks">タスク</button>
+    <button data-tab="arts">Artifact</button>
+    <button id="wrap">折返し</button>
+  </div>
+  <div id="err" role="alert"></div>
+  <pre id="term" class="view" tabindex="0" aria-label="端末。フォーカス中はキー入力を直接送信"></pre>
+  <div id="tasks" class="view" hidden></div>
+  <div id="arts" class="view" hidden></div>
+  <div id="keys"></div>
+  <form id="form">
+    <input id="input" placeholder="コマンド / 回答を入力" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button type="button" id="raw" title="Enterなしで送信">入力のみ</button>
+    <button>送信⏎</button>
+  </form>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
+const store = (k, v) => { try { return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v); } catch { return null; } };
+let state = {workspaces:[], tabs:[], panes:[]}, sel = decodeURIComponent(location.hash.slice(1)), tab = 'term', lastText = null;
+let wrap = (store('wrap') ?? (innerWidth <= 700 ? '1' : '0')) === '1';
+
+// --- ANSI (SGR) を HTML に変換 ---
+const BASE = ['#3b3f4a','#e5484d','#30a46c','#e5a50a','#5b9dff','#c678dd','#2bc4c4','#d6d9df',
+              '#6b7280','#ff6b70','#4cc38a','#ffcb47','#8ab8ff','#df9cf0','#56e0e0','#ffffff'];
+function c256(n) {
+  if (n < 16) return BASE[n];
+  if (n > 231) { const v = 8 + (n - 232) * 10; return `rgb(${v},${v},${v})`; }
+  n -= 16;
+  return `rgb(${[n / 36, n / 6 % 6, n % 6].map(x => (x | 0) && 55 + (x | 0) * 40)})`;
+}
+function ansi(text) {
+  let s = {}, out = '';
+  // 奇数番目 = SGR パラメータ。その他の制御シーケンスは捨てる
+  text = text.replace(/\r/g, '').replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b\[[0-9;?]*[A-Za-ln-z]|\x1b[^\[\]]/g, '');
+  text.split(/\x1b\[([0-9;:]*)m/).forEach((part, i) => {
+    if (i % 2) {
+      const a = part.split(/[;:]/).map(Number);
+      for (let j = 0; j < a.length; j++) {
+        const n = a[j];
+        if (n === 0) s = {};
+        else if (n === 1) s.b = 1; else if (n === 2) s.d = 1; else if (n === 3) s.i = 1; else if (n === 4) s.u = 1; else if (n === 7) s.r = 1;
+        else if (n === 22) s.b = s.d = 0; else if (n === 23) s.i = 0; else if (n === 24) s.u = 0; else if (n === 27) s.r = 0;
+        else if (n >= 30 && n <= 37) s.fg = BASE[n - 30]; else if (n >= 90 && n <= 97) s.fg = BASE[n - 82];
+        else if (n >= 40 && n <= 47) s.bg = BASE[n - 40]; else if (n >= 100 && n <= 107) s.bg = BASE[n - 92];
+        else if (n === 39) delete s.fg; else if (n === 49) delete s.bg;
+        else if (n === 38 || n === 48) {
+          const k = n === 38 ? 'fg' : 'bg';
+          if (a[j + 1] === 5) { s[k] = c256(a[j + 2]); j += 2; }
+          else if (a[j + 1] === 2) { s[k] = `rgb(${a.slice(j + 2, j + 5)})`; j += 4; }
+        }
+      }
+    } else if (part) {
+      const fg = s.r ? s.bg || '#0b0c0f' : s.fg, bg = s.r ? s.fg || '#d6d9df' : s.bg;
+      const css = (fg ? `color:${fg};` : '') + (bg ? `background:${bg};` : '') + (s.b ? 'font-weight:bold;' : '') +
+        (s.d ? 'opacity:.6;' : '') + (s.i ? 'font-style:italic;' : '') + (s.u ? 'text-decoration:underline;' : '');
+      // 奇数番目 = URL
+      const html = part.split(/(https?:\/\/[^\s│"'<>]+)/).map((x, k) =>
+        k % 2 ? `<a href="${esc(x)}" target="_blank" rel="noopener noreferrer">${esc(x)}</a>` : esc(x)).join('');
+      out += css ? `<span style="${css}">${html}</span>` : html;
+    }
+  });
+  return out;
+}
+
+// --- 通信 ---
+async function api(path, body) {
+  const r = await fetch(path, body && {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error);
+  return j;
+}
+let queue = Promise.resolve();  // キー入力の順序を保つ
+function send(data) {
+  const pane = sel;
+  if (!pane) return;
+  queue = queue.then(() => api('/api/input', {pane, ...data}))
+    .then(() => { $('#err').textContent = ''; setTimeout(readPane, 150); })
+    .catch(e => $('#err').textContent = e.message);
+}
+
+// --- 描画 ---
+const paneName = p => p.terminal_title_stripped || p.label || p.cwd?.split('/').pop() || p.pane_id;
+const running = p => p.claude?.tasks.filter(t => t.status === 'running').length || 0;
+let listHtml = '', urlsHtml = '';
+function render() {
+  const html = state.workspaces.map(w => state.tabs.filter(t => t.workspace_id === w.workspace_id).map(t =>
+    `<h2>${esc(w.label)} / ${esc(t.label)}</h2>` + state.panes.filter(p => p.tab_id === t.tab_id).map(p =>
+      `<button class="pane ${p.pane_id === sel ? 'on' : ''}" data-pane="${esc(p.pane_id)}">
+        <div><i class="dot ${p.agent ? esc(p.agent_status) : ''}"></i>${esc(paneName(p))}</div>
+        <small>${esc(p.agent ? `${p.agent} · ${p.agent_status}` : 'shell')}${running(p) ? ` · 実行中 ${running(p)}` : ''}</small>
+        <small>${esc(p.cwd || '')}</small></button>`).join('')).join('')).join('');
+  if (html !== listHtml) $('#list').innerHTML = listHtml = html;  // 変化時のみ更新
+  const links = (state.urls || []).map(u => `<div><a href="${esc(u)}">${esc(new URL(u).host)}</a></div>`).join('');
+  if (links !== urlsHtml) $('#urls').innerHTML = (urlsHtml = links) && `<h2>他端末用URL (長押し/右クリックでコピー)</h2>${links}`;
+  const blocked = state.panes.filter(p => p.agent_status === 'blocked').length;
+  document.title = (blocked ? `(${blocked}) ` : '') + 'herdr';
+
+  const p = state.panes.find(p => p.pane_id === sel);
+  document.body.classList.toggle('open', !!sel);
+  $('#title').textContent = p ? `${paneName(p)} [${p.agent ? p.agent_status : 'shell'}]` : sel ? '(閉じられた pane)' : 'pane を選択';
+  const tasks = p?.claude?.tasks || [], arts = p?.claude?.artifacts || [];
+  $('#tasks').innerHTML = tasks.map(t => `<div class="row"><i class="dot ${esc(t.status)}"></i><span>${esc(t.title)}</span>
+    <small>${esc(t.kind)}${t.bg ? ' (bg)' : ''} · ${esc(t.status)}<br>${t.start ? esc(new Date(t.start).toLocaleString()) : ''}</small></div>`).join('')
+    || '<div class="row">subagent / shell / task なし</div>';
+  $('#arts').innerHTML = arts.map(a => /^https:\/\//.test(a.url) ? `<div class="row"><span><a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">${esc(a.title)}</a></span></div>` : '').join('')
+    || '<div class="row">Artifact なし</div>';
+}
+function show() {
+  for (const id of ['term','tasks','arts']) $('#' + id).hidden = id !== tab;
+  document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  $('#wrap').classList.toggle('on', wrap); $('#term').classList.toggle('wrap', wrap);
+}
+async function readPane() {
+  const id = sel, w = wrap;
+  if (!id || document.hidden) return;
+  try {
+    const {text} = await api(`/api/pane?id=${encodeURIComponent(id)}&wrap=${w ? 1 : 0}`);
+    if (id !== sel || w !== wrap || text === lastText) return;
+    if (!getSelection().isCollapsed) return;  // コピーのため選択中は更新しない
+    const el = $('#term'), bottom = lastText === null || el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    el.innerHTML = ansi(text); lastText = text;
+    if (bottom) el.scrollTop = el.scrollHeight;
+  } catch (e) { if (id === sel) $('#term').textContent = e.message; lastText = null; }
+}
+function select(id) { sel = id; lastText = null; $('#term').textContent = ''; $('#err').textContent = ''; render(); readPane(); }
+
+// --- イベント ---
+$('#list').onclick = e => { const b = e.target.closest('[data-pane]'); if (b) location.hash = encodeURIComponent(b.dataset.pane); };
+onhashchange = () => select(decodeURIComponent(location.hash.slice(1)));
+$('#back').onclick = () => location.hash = '';
+document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; show(); });
+$('#wrap').onclick = () => { wrap = !wrap; store('wrap', wrap ? '1' : '0'); lastText = null; show(); readPane(); };
+const light = v => { document.documentElement.dataset.theme = v ? 'light' : 'dark'; };
+light(store('theme') === 'light');  // 既定はダーク
+$('#theme').onclick = () => { const v = document.documentElement.dataset.theme !== 'light'; light(v); store('theme', v ? 'light' : 'dark'); };
+
+for (const [label, key] of [['⏎','enter'],['Esc','esc'],['↑','up'],['↓','down'],['←','left'],['→','right'],['Tab','tab'],['⇧Tab','shift+tab'],
+    ['Space','space'],['⌫','backspace'],['1','1'],['2','2'],['3','3'],['4','4'],['y','y'],['n','n'],['^C','ctrl+c'],['^D','ctrl+d'],['^L','ctrl+l'],['^R','ctrl+r']]) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.textContent = label;
+  b.onclick = () => send({keys:[key]});
+  $('#keys').append(b);
+}
+$('#form').onsubmit = e => {
+  e.preventDefault();
+  const v = $('#input').value;
+  send(v ? {text:v, enter:true} : {keys:['enter']});
+  $('#input').value = '';
+};
+$('#raw').onclick = () => { const v = $('#input').value; if (v) send({text:v}); $('#input').value = ''; };
+
+// 端末にフォーカス中はキーを直接送る
+const KEYS = {Enter:'enter', Escape:'esc', Backspace:'backspace', Tab:'tab', ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', ' ':'space'};
+$('#term').onkeydown = e => {
+  if (e.isComposing || e.metaKey || e.altKey) return;
+  if (e.ctrlKey) {
+    if (e.shiftKey || !/^[a-z]$/i.test(e.key) || (e.key === 'c' && !getSelection().isCollapsed) || e.key === 'v') return;
+    send({keys:['ctrl+' + e.key.toLowerCase()]});
+  } else if (KEYS[e.key]) send({keys:[e.shiftKey && e.key === 'Tab' ? 'shift+tab' : KEYS[e.key]]});
+  else if (e.key.length === 1) send({text:e.key});
+  else return;
+  e.preventDefault();
+};
+$('#term').onpaste = e => { e.preventDefault(); const t = e.clipboardData.getData('text'); if (t) send({text:t}); };
+
+async function loop(fn, ms) { try { await fn(); } finally { setTimeout(loop, ms, fn, ms); } }
+loop(async () => {
+  if (document.hidden) return;
+  try { state = await api('/api/state'); render(); if ($('#err').dataset.net) { $('#err').textContent = ''; delete $('#err').dataset.net; } }
+  catch (e) { $('#err').textContent = '接続エラー: ' + e.message; $('#err').dataset.net = 1; }
+}, 2000);
+loop(readPane, 1000);
+show(); render();
+</script>
+</body>
+</html>
