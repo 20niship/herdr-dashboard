@@ -57,7 +57,13 @@ def own_ips():
         return [a["local"] for i in json.loads(out) if not i["ifname"].startswith(("docker", "br-", "veth", "virbr"))
                 for a in i["addr_info"] if "local" in a]
     except (OSError, ValueError, KeyError, subprocess.SubprocessError):
+        pass
+    try:  # macOS などの `ip` が無い環境
+        out = subprocess.run(["ifconfig"], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
         return []
+    ips = re.findall(r"^\s+inet (\d+\.\d+\.\d+\.\d+)", out, re.M)
+    return [ip for ip in ips if not ip.startswith(("127.", "169.254."))]
 
 
 def urls(token):
