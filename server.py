@@ -311,5 +311,10 @@ if __name__ == "__main__":
         print(f"本端末:  http://localhost:{PORT}")
     for u in urls(Handler.token):
         print(f"他端末:  {u}")
+        try:  # ponytail: segno が無い(uv を使わない)場合は QR を省略する
+            import segno
+            segno.make(u).terminal(compact=True)
+        except ImportError:
+            pass
     print(end="", flush=True)
     server.serve_forever()
