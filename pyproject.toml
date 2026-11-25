@@ -1,0 +1,7 @@
+[project]
+name = "herdr-dashboard"
+version = "0.1.0"
+description = "herdr の状態を閲覧・操作するダッシュボード"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
