@@ -104,15 +104,12 @@ def own_ips():
             return ips
     except (OSError, ValueError, KeyError, subprocess.SubprocessError):
         pass
-    # ip コマンドがない環境(macOS など)。UDP の connect はパケットを送らず、経路上の自 IP だけが決まる
-    # ponytail: デフォルト経路の 1 つしか取れない。全インターフェースが必要なら ifconfig を解析する
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(("192.0.2.1", 9))
-            ip = s.getsockname()[0]
-        return [] if ip.startswith(("127.", "0.")) else [ip]
-    except OSError:
+    try:  # macOS などの `ip` が無い環境
+        out = subprocess.run(["ifconfig"], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
         return []
+    ips = re.findall(r"^\s+inet (\d+\.\d+\.\d+\.\d+)", out, re.M)
+    return [ip for ip in ips if not ip.startswith(("127.", "169.254."))]
 
 
 def urls(token):
@@ -410,6 +407,11 @@ if __name__ == "__main__":
     others = urls(Handler.token)
     for u in others:
         print(f"他端末:  {u}")
+        try:  # ponytail: segno が無い(uv を使わない)場合は QR を省略する
+            import segno
+            segno.make(u).terminal(compact=True)
+        except ImportError:
+            pass
     if not others and BIND != "127.0.0.1":
         print(f"他端末:  IP を取得できません。http://<このマシンのIP>:{PORT}/?token=<{TOKEN_FILE} の内容>")
     print(end="", flush=True)

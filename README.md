@@ -1,6 +1,6 @@
 # herdr-dashboard
 
-herdr の状態をブラウザから閲覧・操作する Web アプリ。Python 標準ライブラリのみで動作します。
+herdr の状態をブラウザから閲覧・操作する Web アプリ。Python 標準ライブラリのみで動作します(起動時の QR コード表示のみ `segno` を使用。無くても動作)。
 
 ```sh
 uv run server.py             # http://localhost:8765

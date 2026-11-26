@@ -2,18 +2,21 @@
 import server
 from server import Handler, Session, send
 
-# ip コマンドがなくても落ちずに IP を返す
+# ip コマンドがない環境では ifconfig の出力から IP を取る
 real_run = server.subprocess.run
 
 
-def no_ip(*args, **kwargs):
-    raise FileNotFoundError("ip")
+def no_ip(args, **kwargs):
+    if args[0] == "ip":
+        raise FileNotFoundError("ip")
+    out = "lo0:\n\tinet 127.0.0.1 netmask 0xff000000\nen0:\n\tinet 192.168.1.7 netmask 0xffffff00\n"
+    return server.subprocess.CompletedProcess(args, 0, out, "")
 
 
 server.subprocess.run = no_ip
 fallback = server.own_ips()
 server.subprocess.run = real_run
-assert fallback and not fallback[0].startswith("127."), fallback
+assert fallback == ["192.168.1.7"], fallback
 
 h = Handler.__new__(Handler)
 h.token = "secret"
