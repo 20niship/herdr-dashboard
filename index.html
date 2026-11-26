@@ -5,52 +5,88 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
 <title>herdr</title>
 <style>
-:root { color-scheme: dark; --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --fg:#e4e6eb; --dim:#8b93a1; --accent:#5b9dff; }
+:root { color-scheme: dark; --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --fg:#e4e6eb; --dim:#8b93a1; --accent:#5b9dff; --red:#e5484d; --fs:12px; --mono:ui-monospace, Menlo, Consolas, monospace; }
 :root[data-theme=light] { color-scheme: light; --bg:#f6f7f9; --panel:#fff; --line:#dde0e6; --fg:#1c1f26; --dim:#667080; --accent:#1463d6; }
 * { box-sizing: border-box; }
 body { margin:0; height:100dvh; display:grid; grid-template-columns:280px minmax(0,1fr); grid-template-rows:minmax(0,1fr);
   background:var(--bg); color:var(--fg); font:14px/1.5 system-ui, sans-serif; }
 button, input { font:inherit; color:inherit; background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:6px 10px; }
-button { cursor:pointer; } button.on { border-color:var(--accent); color:var(--accent); }
+button { cursor:pointer; touch-action:manipulation; } button.on { border-color:var(--accent); color:var(--accent); }
 a { color:var(--accent); overflow-wrap:anywhere; }
+#offline { position:fixed; inset:0 0 auto; z-index:10; background:var(--red); color:#fff; text-align:center; padding:6px; font-weight:bold; }
 nav { overflow:auto; border-right:1px solid var(--line); padding:8px; }
-nav header { display:flex; justify-content:space-between; align-items:center; }
+nav header { display:flex; gap:6px; align-items:center; margin-bottom:8px; }
+nav header strong { flex:1; }
 h2 { font-size:12px; color:var(--dim); margin:14px 4px 4px; }
 #urls div { margin:0 4px; }
-.pane { display:block; width:100%; text-align:left; margin-bottom:4px; }
-.pane small { display:block; color:var(--dim); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
-.pane div { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.pane { display:block; width:100%; text-align:left; margin-bottom:4px; padding:4px 10px; }
+.pane div, .pane small { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.pane small { color:var(--dim); }
+.pane.blocked-card { border:2px solid var(--red); background:color-mix(in srgb, var(--red) 15%, var(--panel)); }
 .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--dim); margin-right:6px; }
-.working,.running { background:#e5a50a; } .blocked,.failed { background:#e5484d; } .idle,.done,.completed { background:#30a46c; }
+.dot.working,.dot.running { background:#e5a50a; } .dot.blocked,.dot.failed { background:var(--red); } .dot.idle,.dot.done,.dot.completed { background:#30a46c; }
 main { display:flex; flex-direction:column; min-width:0; min-height:0; }
 .bar { display:flex; gap:6px; padding:6px 8px; align-items:center; border-bottom:1px solid var(--line); }
-#title { flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+#title { flex:1 1 0; min-width:0; order:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 #back { display:none; }
+.tabs { display:flex; gap:4px; order:2; } .tools { display:flex; gap:4px; order:3; }
+.tabs button { white-space:nowrap; }
+.tabs b { font-size:11px; margin-left:4px; color:var(--dim); } .tabs b.live { color:#e5a50a; }
+#full { margin:4px 8px; }
+.stage { flex:1; min-height:0; display:flex; flex-direction:column; position:relative; }
 .view { flex:1; min-height:0; overflow:auto; }
-#term { margin:0; padding:8px; background:#0b0c0f; color:#d6d9df; font:12px/1.35 ui-monospace, Menlo, Consolas, monospace; white-space:pre; }
-#term.wrap { white-space:pre-wrap; overflow-wrap:anywhere; }
+#term { margin:0; padding:8px; background:#0b0c0f; color:#d6d9df; font:var(--fs)/1.35 var(--mono); white-space:pre; }
+#term.wrap { white-space:pre-wrap; overflow-wrap:anywhere; overflow-y:scroll; }  /* 幅を固定して罫線の長さを合わせる */
 #term:focus { outline:2px solid var(--accent); outline-offset:-2px; }
+#down { position:absolute; right:14px; bottom:14px; width:44px; height:44px; border-radius:50%; font-size:20px; box-shadow:0 2px 8px #0008; }
+#hist { padding:8px; }
+#hist pre { margin:0; font:var(--fs)/1.45 var(--mono); white-space:pre-wrap; overflow-wrap:anywhere; }
+.msg { margin-bottom:8px; }
+.msg small { color:var(--dim); }
+.msg.user { background:var(--panel); border-left:3px solid var(--accent); border-radius:4px; padding:6px 8px; }
+details.msg { margin-bottom:4px; color:var(--dim); }
+details.msg summary { cursor:pointer; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font:var(--fs)/1.6 var(--mono); }
+details.msg pre { border-left:2px solid var(--line); padding-left:8px; max-height:50vh; overflow:auto; }
+details.error summary { color:var(--red); }
+.older { display:flex; gap:6px; justify-content:center; margin-bottom:8px; }
 .row { display:flex; gap:8px; align-items:baseline; padding:8px 12px; border-bottom:1px solid var(--line); }
-.row span:nth-child(2) { flex:1; overflow-wrap:anywhere; }
+.row span { flex:1; overflow-wrap:anywhere; }
 .row small { color:var(--dim); white-space:nowrap; }
-#keys { display:flex; gap:4px; overflow-x:auto; padding:6px 8px 0; flex-shrink:0; }
-#keys button { min-width:40px; white-space:nowrap; flex-shrink:0; }
+#keys { display:flex; flex-wrap:wrap; gap:4px; padding:6px 8px 0; }
+#keys button { flex:1 0 auto; min-width:36px; max-width:90px; white-space:nowrap; padding-inline:6px; }
+#keys:not(.all) .extra { display:none; }
+#keys.blocked button:not(.extra) { min-height:48px; font-size:18px; border-color:var(--red); }
 form { display:flex; gap:6px; padding:6px 8px calc(6px + env(safe-area-inset-bottom)); }
 form input { flex:1; min-width:0; font-size:16px; }
-#err { color:#e5484d; padding:0 8px; }
+#err { color:var(--red); padding:0 8px; }
+#grid { display:none; grid-template-columns:repeat(auto-fit, minmax(420px, 1fr)); grid-auto-rows:minmax(0,1fr); gap:2px; background:var(--line); min-width:0; min-height:0; }
+#grid iframe { width:100%; height:100%; border:0; background:var(--bg); }
+#grid p { background:var(--bg); margin:0; padding:20px; }
+body.split main { display:none; } body.split #grid { display:grid; }
 [hidden] { display:none !important; }
 @media (max-width:700px) {
   body { grid-template-columns:minmax(0,1fr); }
   nav { border:0; }
   body:not(.open) main, body.open nav { display:none; }
   #back { display:block; }
-  .bar { flex-wrap:wrap; } #title { flex-basis:60%; }
+  #splitbtn { display:none; }
+  /* 1 行目: 戻る・タイトル・表示ツール / 2 行目: タブ */
+  .bar { flex-wrap:wrap; gap:4px; padding:4px 6px; }
+  .bar button { padding:4px 8px; }
+  .tools { order:2; } .tabs { order:3; flex-basis:100%; } .tabs button { flex:1; padding:4px 2px; }
 }
+body.embed { grid-template-columns:minmax(0,1fr); }
+body.embed nav, body.embed #back { display:none; }
+body.embed main { display:flex; }
 </style>
 </head>
 <body>
+<div id="offline" role="alert" hidden></div>
 <nav>
-  <header><strong>herdr</strong><button id="theme" aria-label="テーマ切替">◐</button></header>
+  <header><strong>herdr</strong>
+    <button id="agentonly" title="agent の pane のみ表示">agent のみ</button>
+    <button id="splitbtn" title="分割表示" aria-label="分割表示">⊞</button>
+    <button id="theme" aria-label="テーマ切替">◐</button></header>
   <div id="list"></div>
   <div id="urls"></div>
 </nav>
@@ -58,15 +94,27 @@ form input { flex:1; min-width:0; font-size:16px; }
   <div class="bar">
     <button id="back" aria-label="一覧へ戻る">←</button>
     <span id="title">pane を選択</span>
-    <button data-tab="term" class="on">端末</button>
-    <button data-tab="tasks">タスク</button>
-    <button data-tab="arts">Artifact</button>
-    <button id="wrap">折返し</button>
+    <div class="tabs">
+      <button data-tab="term">端末</button>
+      <button data-tab="hist">履歴</button>
+      <button data-tab="tasks">タスク<b id="ntasks"></b></button>
+      <button data-tab="arts">Artifact<b id="narts"></b></button>
+    </div>
+    <div class="tools">
+      <button id="smaller" aria-label="文字を小さく">A-</button>
+      <button id="larger" aria-label="文字を大きく">A+</button>
+      <button id="wrap" title="折返し" aria-label="折返し">↩</button>
+    </div>
   </div>
   <div id="err" role="alert"></div>
-  <pre id="term" class="view" tabindex="0" aria-label="端末。フォーカス中はキー入力を直接送信"></pre>
-  <div id="tasks" class="view" hidden></div>
-  <div id="arts" class="view" hidden></div>
+  <button id="full" hidden></button>
+  <div class="stage">
+    <pre id="term" class="view" tabindex="0" aria-label="端末。フォーカス中はキー入力を直接送信"></pre>
+    <div id="hist" class="view" hidden></div>
+    <div id="tasks" class="view" hidden></div>
+    <div id="arts" class="view" hidden></div>
+    <button id="down" aria-label="最下部へ" hidden>↓</button>
+  </div>
   <div id="keys"></div>
   <form id="form">
     <input id="input" placeholder="コマンド / 回答を入力" autocomplete="off" autocapitalize="off" spellcheck="false">
@@ -74,14 +122,23 @@ form input { flex:1; min-width:0; font-size:16px; }
     <button>送信⏎</button>
   </form>
 </main>
+<div id="grid"><p>左の一覧から pane を選んでください (最大 4)。もう一度選ぶと閉じます。</p></div>
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 const store = (k, v) => { try { return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v); } catch { return null; } };
+const embed = new URLSearchParams(location.search).has('embed');
 let state = {workspaces:[], tabs:[], panes:[]}, sel = decodeURIComponent(location.hash.slice(1)), tab = 'term', lastText = null;
 let wrap = (store('wrap') ?? (innerWidth <= 700 ? '1' : '0')) === '1';
+let fontSize = +store('font') || 12, agentOnly = store('agentonly') === '1';
+let full = false;  // 全履歴を表示中はライブ更新を止める
+let split = false;
 
-// --- ANSI (SGR) を HTML に変換 ---
+// --- テキスト → HTML ---
+const linkify = text => text.split(/(https?:\/\/[^\s│"'<>]+)/).map((x, k) =>  // 奇数番目 = URL
+  k % 2 ? `<a href="${esc(x)}" target="_blank" rel="noopener noreferrer">${esc(x)}</a>` : esc(x)).join('');
+
+// ANSI (SGR) を HTML に変換
 const BASE = ['#3b3f4a','#e5484d','#30a46c','#e5a50a','#5b9dff','#c678dd','#2bc4c4','#d6d9df',
               '#6b7280','#ff6b70','#4cc38a','#ffcb47','#8ab8ff','#df9cf0','#56e0e0','#ffffff'];
 function c256(n) {
@@ -115,94 +172,256 @@ function ansi(text) {
       const fg = s.r ? s.bg || '#0b0c0f' : s.fg, bg = s.r ? s.fg || '#d6d9df' : s.bg;
       const css = (fg ? `color:${fg};` : '') + (bg ? `background:${bg};` : '') + (s.b ? 'font-weight:bold;' : '') +
         (s.d ? 'opacity:.6;' : '') + (s.i ? 'font-style:italic;' : '') + (s.u ? 'text-decoration:underline;' : '');
-      // 奇数番目 = URL
-      const html = part.split(/(https?:\/\/[^\s│"'<>]+)/).map((x, k) =>
-        k % 2 ? `<a href="${esc(x)}" target="_blank" rel="noopener noreferrer">${esc(x)}</a>` : esc(x)).join('');
-      out += css ? `<span style="${css}">${html}</span>` : html;
+      out += css ? `<span style="${css}">${linkify(part)}</span>` : linkify(part);
     }
   });
   return out;
 }
+// 折返し表示では長い罫線を画面幅で切る
+const ruler = document.createElement('canvas').getContext('2d');
+function clipRules(text) {
+  const el = $('#term');
+  if (!wrap || !el.clientWidth) return text;
+  ruler.font = `${fontSize}px ${getComputedStyle(el).fontFamily}`;
+  const cols = Math.max(10, Math.floor((el.clientWidth - 18) / ruler.measureText('─').width));
+  return text.replace(/([─━═╌┄])\1{9,}/g, (m, c) => c.repeat(Math.min(m.length, cols)));
+}
 
 // --- 通信 ---
-async function api(path, body) {
-  const r = await fetch(path, body && {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
-  const j = await r.json();
+async function api(path, body, timeout = 15000) {
+  const r = await fetch(path, {signal: AbortSignal.timeout(timeout),
+    ...(body && {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})});
+  const j = await r.json().catch(() => ({error: `HTTP ${r.status}`}));
   if (!r.ok) throw new Error(j.error);
   return j;
 }
+const fail = e => $('#err').textContent = e.message;
 let queue = Promise.resolve();  // キー入力の順序を保つ
 function send(data) {
   const pane = sel;
   if (!pane) return;
+  if (full) live();
   queue = queue.then(() => api('/api/input', {pane, ...data}))
     .then(() => { $('#err').textContent = ''; setTimeout(readPane, 150); })
-    .catch(e => $('#err').textContent = e.message);
+    .catch(fail);
 }
 
-// --- 描画 ---
+// --- 一覧とヘッダー ---
+const current = () => state.panes.find(p => p.pane_id === sel);
 const paneName = p => p.terminal_title_stripped || p.label || p.cwd?.split('/').pop() || p.pane_id;
 const running = p => p.claude?.tasks.filter(t => t.status === 'running').length || 0;
-let listHtml = '', urlsHtml = '';
+const rank = p => !p.agent ? 4 : ({blocked:0, working:1, done:2, idle:2}[p.agent_status] ?? 3);
+const shortPath = c => { const a = (c || '').split('/').filter(Boolean); return a.length > 2 ? '…/' + a.slice(-2).join('/') : c || ''; };
+const openIds = () => split ? [...$('#grid').querySelectorAll('iframe')].map(f => f.dataset.id) : [sel];
+// 変化した時だけ書き換える(スクロール位置とフォーカスを保つ)
+const cache = {};
+const setHtml = (id, html) => { if (cache[id] !== html) $(id).innerHTML = cache[id] = html; };
 function render() {
-  const html = state.workspaces.map(w => state.tabs.filter(t => t.workspace_id === w.workspace_id).map(t =>
-    `<h2>${esc(w.label)} / ${esc(t.label)}</h2>` + state.panes.filter(p => p.tab_id === t.tab_id).map(p =>
-      `<button class="pane ${p.pane_id === sel ? 'on' : ''}" data-pane="${esc(p.pane_id)}">
-        <div><i class="dot ${p.agent ? esc(p.agent_status) : ''}"></i>${esc(paneName(p))}</div>
-        <small>${esc(p.agent ? `${p.agent} · ${p.agent_status}` : 'shell')}${running(p) ? ` · 実行中 ${running(p)}` : ''}</small>
-        <small>${esc(p.cwd || '')}</small></button>`).join('')).join('')).join('');
-  if (html !== listHtml) $('#list').innerHTML = listHtml = html;  // 変化時のみ更新
+  const open = openIds();
+  const where = p => `${state.workspaces.find(w => w.workspace_id === p.workspace_id)?.label ?? ''}/${state.tabs.find(t => t.tab_id === p.tab_id)?.label ?? ''}`;
+  setHtml('#list', state.panes.filter(p => !agentOnly || p.agent).sort((a, b) => rank(a) - rank(b)).map(p =>
+    `<button class="pane ${open.includes(p.pane_id) ? 'on' : ''} ${p.agent_status === 'blocked' ? 'blocked-card' : ''}" data-pane="${esc(p.pane_id)}" title="${esc(p.cwd || '')}">
+      <div><i class="dot ${p.agent ? esc(p.agent_status) : ''}"></i>${esc(paneName(p))}</div>
+      <small>${esc(p.agent ? p.agent_status : 'shell')}${running(p) ? ` · 実行中 ${running(p)}` : ''} · ${esc(shortPath(p.cwd))} · ${esc(where(p))}</small></button>`).join('')
+    || '<h2>pane なし</h2>');
   const links = (state.urls || []).map(u => `<div><a href="${esc(u)}">${esc(new URL(u).host)}</a></div>`).join('');
-  if (links !== urlsHtml) $('#urls').innerHTML = (urlsHtml = links) && `<h2>他端末用URL (長押し/右クリックでコピー)</h2>${links}`;
+  setHtml('#urls', links && `<h2>他端末用URL (長押し/右クリックでコピー)</h2>${links}`);
   const blocked = state.panes.filter(p => p.agent_status === 'blocked').length;
   document.title = (blocked ? `(${blocked}) ` : '') + 'herdr';
 
-  const p = state.panes.find(p => p.pane_id === sel);
+  const p = current();
   document.body.classList.toggle('open', !!sel);
   $('#title').textContent = p ? `${paneName(p)} [${p.agent ? p.agent_status : 'shell'}]` : sel ? '(閉じられた pane)' : 'pane を選択';
-  const tasks = p?.claude?.tasks || [], arts = p?.claude?.artifacts || [];
-  $('#tasks').innerHTML = tasks.map(t => `<div class="row"><i class="dot ${esc(t.status)}"></i><span>${esc(t.title)}</span>
+  $('#keys').classList.toggle('blocked', p?.agent_status === 'blocked');
+  const tasks = p?.claude?.tasks || [], arts = p?.claude?.artifacts || [], active = p ? running(p) : 0;
+  $('#ntasks').textContent = tasks.length ? (active ? `${active}/${tasks.length}` : tasks.length) : '';
+  $('#ntasks').classList.toggle('live', active > 0);
+  $('#narts').textContent = arts.length || '';
+  setHtml('#tasks', tasks.map(t => `<div class="row"><i class="dot ${esc(t.status)}"></i><span>${esc(t.title)}</span>
     <small>${esc(t.kind)}${t.bg ? ' (bg)' : ''} · ${esc(t.status)}<br>${t.start ? esc(new Date(t.start).toLocaleString()) : ''}</small></div>`).join('')
-    || '<div class="row">subagent / shell / task なし</div>';
-  $('#arts').innerHTML = arts.map(a => /^https:\/\//.test(a.url) ? `<div class="row"><span><a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">${esc(a.title)}</a></span></div>` : '').join('')
-    || '<div class="row">Artifact なし</div>';
+    || '<div class="row">subagent / shell / task なし</div>');
+  setHtml('#arts', arts.map(a => /^https:\/\//.test(a.url) ? `<div class="row"><span><a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">${esc(a.title)}</a></span></div>` : '').join('')
+    || '<div class="row">Artifact なし</div>');
+  const sc = p?.scroll;
+  $('#full').hidden = tab !== 'term' || !(full || sc?.max_offset_from_bottom > 0);
+  if (!$('#full').disabled)
+    $('#full').textContent = full ? '▶ ライブ表示に戻る' : `↑ 全履歴を取得 (約 ${(sc?.max_offset_from_bottom || 0) + (sc?.viewport_rows || 0)} 行。herdr 側が一時的にスクロールします)`;
 }
 function show() {
-  for (const id of ['term','tasks','arts']) $('#' + id).hidden = id !== tab;
+  for (const id of ['term','hist','tasks','arts']) $('#' + id).hidden = id !== tab;
   document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  $('#keys').hidden = $('#form').hidden = tab === 'tasks' || tab === 'arts';
   $('#wrap').classList.toggle('on', wrap); $('#term').classList.toggle('wrap', wrap);
+  $('#agentonly').classList.toggle('on', agentOnly);
+  render(); updateDown();
+}
+
+// --- 端末 ---
+const atBottom = el => el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+const toBottom = el => { el.scrollTop = el.scrollHeight; };
+function updateDown() {
+  $('#down').hidden = !(tab === 'term' || tab === 'hist') || atBottom($('#' + tab));
+}
+function paint(text, stick) {
+  const el = $('#term'), bottom = stick || atBottom(el);
+  el.innerHTML = ansi(clipRules(text)); lastText = text;
+  if (bottom) toBottom(el);
+  updateDown();
 }
 async function readPane() {
   const id = sel, w = wrap;
-  if (!id || document.hidden) return;
+  if (!id || split || full || tab !== 'term' || document.hidden) return;
   try {
     const {text} = await api(`/api/pane?id=${encodeURIComponent(id)}&wrap=${w ? 1 : 0}`);
-    if (id !== sel || w !== wrap || text === lastText) return;
+    if (id !== sel || w !== wrap || full || text === lastText) return;
     if (!getSelection().isCollapsed) return;  // コピーのため選択中は更新しない
-    const el = $('#term'), bottom = lastText === null || el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-    el.innerHTML = ansi(text); lastText = text;
-    if (bottom) el.scrollTop = el.scrollHeight;
-  } catch (e) { if (id === sel) $('#term').textContent = e.message; lastText = null; }
+    paint(text, lastText === null);
+  } catch (e) { if (id === sel) { $('#term').textContent = e.message; lastText = null; } }
 }
-function select(id) { sel = id; lastText = null; $('#term').textContent = ''; $('#err').textContent = ''; render(); readPane(); }
+function live() { full = false; lastText = null; render(); readPane(); }
+async function loadFull() {
+  const id = sel, button = $('#full');
+  button.disabled = true; button.textContent = '取得中…';
+  full = true;
+  try {
+    const {text} = await api('/api/scrollback', {pane: id}, 120000);
+    if (id !== sel || !full) return;
+    paint(text, true);
+  } catch (e) { fail(e); full = false; }
+  finally { button.disabled = false; render(); }
+}
+// 再描画(折返し・文字サイズ・画面幅の変更)
+function repaint() { if (full) paint(lastText || ''); else { lastText = null; readPane(); } }
+
+// --- 会話履歴 (Claude) ---
+let hist = null;  // {sid, start, end}
+const time = ts => ts ? new Date(ts).toLocaleString() : '';
+function msg(m) {
+  if (m.role === 'user' || m.role === 'assistant')
+    return `<div class="msg ${m.role}"><small>${m.role === 'user' ? 'あなた' : 'Claude'} ${esc(time(m.ts))}</small><pre>${linkify(m.text)}</pre></div>`;
+  const label = m.role === 'tool' ? `⏺ ${m.label}` : m.role === 'summary' ? 'コンテキスト要約' : `↳ ${m.label}`;
+  return `<details class="msg ${esc(m.role)}"><summary>${esc(label)}</summary><pre>${linkify(m.text)}</pre></details>`;
+}
+let histBusy = false;
+async function readHistory() {
+  if (!sel || split || tab !== 'hist' || document.hidden || histBusy) return;
+  const el = $('#hist'), session = current()?.agent_session, sid = session?.agent === 'claude' ? session.value : null;
+  if (!sid) {
+    hist = null;
+    el.innerHTML = '<div class="row"><span>この pane に Claude の会話履歴はありません。shell の過去の出力は端末タブの「全履歴を取得」で読めます。</span></div>';
+    return;
+  }
+  histBusy = true;
+  try {
+    const old = hist?.sid === sid ? hist : null;
+    const r = await api(`/api/history?sid=${encodeURIComponent(sid)}${old ? `&after=${old.end}` : ''}`);
+    if (current()?.agent_session?.value !== sid || (old && hist !== old)) return;
+    if (!old) {
+      hist = {sid, start: r.start, end: r.end};
+      el.innerHTML = `<div class="older"><button data-older="page">↑ 前の 200 件</button><button data-older="all">すべて読み込む</button></div><div id="msgs">${r.items.map(msg).join('')}</div>`;
+      toBottom(el);
+    } else if (r.items.length) {
+      const bottom = atBottom(el);
+      $('#msgs').insertAdjacentHTML('beforeend', r.items.map(msg).join('')); old.end = r.end;
+      if (bottom) toBottom(el);
+    }
+    $('.older').hidden = hist.start === 0;
+    updateDown();
+  } catch (e) { fail(e); }
+  finally { histBusy = false; }
+}
+async function loadOlder(all) {
+  const h = hist, el = $('#hist');
+  if (!h || histBusy) return;
+  histBusy = true;
+  try {
+    do {
+      const r = await api(`/api/history?sid=${encodeURIComponent(h.sid)}&before=${h.start}`);
+      if (hist !== h) return;
+      const height = el.scrollHeight, top = el.scrollTop;
+      $('#msgs').insertAdjacentHTML('afterbegin', r.items.map(msg).join(''));
+      h.start = r.start;
+      el.scrollTop = top + el.scrollHeight - height;  // 見ている位置を保つ
+    } while (all && h.start > 0);
+    $('.older').hidden = h.start === 0;
+    updateDown();
+  } catch (e) { fail(e); }
+  finally { histBusy = false; }
+}
+function select(id) {
+  sel = id; lastText = null; full = false; hist = null;
+  $('#term').textContent = ''; $('#hist').textContent = ''; $('#err').textContent = ''; $('#full').disabled = false;
+  show(); readPane(); readHistory();
+}
+
+// --- 分割表示 (PC)。各 pane は自分自身を iframe で開く ---
+function toggleFrame(id) {
+  const grid = $('#grid'), old = grid.querySelector(`iframe[data-id="${CSS.escape(id)}"]`);
+  if (old) old.remove();
+  else if (grid.querySelectorAll('iframe').length < 4) {
+    const f = document.createElement('iframe');
+    f.dataset.id = id; f.title = id; f.src = `${location.pathname}?embed=1#${encodeURIComponent(id)}`;
+    grid.append(f);
+  }
+  grid.querySelector('p').hidden = !!grid.querySelector('iframe');
+  render();
+}
+function setSplit(on) {
+  split = on;
+  document.body.classList.toggle('split', on);
+  $('#splitbtn').classList.toggle('on', on);
+  if (on && current()) toggleFrame(sel);
+  if (!on) { $('#grid').querySelectorAll('iframe').forEach(f => f.remove()); $('#grid p').hidden = false; repaint(); }
+  render();
+}
 
 // --- イベント ---
-$('#list').onclick = e => { const b = e.target.closest('[data-pane]'); if (b) location.hash = encodeURIComponent(b.dataset.pane); };
+if (embed) document.body.classList.add('embed');
+$('#list').onclick = e => {
+  const b = e.target.closest('[data-pane]');
+  if (!b) return;
+  if (split) toggleFrame(b.dataset.pane); else location.hash = encodeURIComponent(b.dataset.pane);
+};
 onhashchange = () => select(decodeURIComponent(location.hash.slice(1)));
 $('#back').onclick = () => location.hash = '';
-document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; show(); });
-$('#wrap').onclick = () => { wrap = !wrap; store('wrap', wrap ? '1' : '0'); lastText = null; show(); readPane(); };
+document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => {
+  tab = b.dataset.tab; show(); readPane(); readHistory();
+});
+$('#wrap').onclick = () => { wrap = !wrap; store('wrap', wrap ? '1' : '0'); show(); repaint(); };
+function setFont(n) {
+  fontSize = Math.min(22, Math.max(8, n)); store('font', fontSize);
+  document.documentElement.style.setProperty('--fs', fontSize + 'px');
+}
+$('#smaller').onclick = () => { setFont(fontSize - 1); repaint(); };
+$('#larger').onclick = () => { setFont(fontSize + 1); repaint(); };
+$('#agentonly').onclick = () => { agentOnly = !agentOnly; store('agentonly', agentOnly ? '1' : '0'); show(); };
+$('#splitbtn').onclick = () => setSplit(!split);
+matchMedia('(max-width:700px)').onchange = e => { if (e.matches && split) setSplit(false); };
+$('#full').onclick = () => full ? live() : loadFull();
+$('#hist').onclick = e => { const b = e.target.closest('[data-older]'); if (b) loadOlder(b.dataset.older === 'all'); };
+$('#down').onclick = () => { toBottom($('#' + tab)); updateDown(); };
+$('#term').onscroll = $('#hist').onscroll = updateDown;
+let width = innerWidth;
+onresize = () => { if (innerWidth !== width) { width = innerWidth; repaint(); } updateDown(); };
 const light = v => { document.documentElement.dataset.theme = v ? 'light' : 'dark'; };
 light(store('theme') === 'light');  // 既定はダーク
 $('#theme').onclick = () => { const v = document.documentElement.dataset.theme !== 'light'; light(v); store('theme', v ? 'light' : 'dark'); };
 
-for (const [label, key] of [['⏎','enter'],['Esc','esc'],['↑','up'],['↓','down'],['←','left'],['→','right'],['Tab','tab'],['⇧Tab','shift+tab'],
-    ['Space','space'],['⌫','backspace'],['1','1'],['2','2'],['3','3'],['4','4'],['y','y'],['n','n'],['^C','ctrl+c'],['^D','ctrl+d'],['^L','ctrl+l'],['^R','ctrl+r']]) {
+// よく使うキーだけ常時表示し、残りは「…」で開く
+function keyButton(label, onclick, extra) {
   const b = document.createElement('button');
-  b.type = 'button'; b.textContent = label;
-  b.onclick = () => send({keys:[key]});
+  b.type = 'button'; b.textContent = label; b.onclick = onclick;
+  if (extra) b.className = 'extra';
   $('#keys').append(b);
+  return b;
 }
+for (const [label, key] of [['⏎','enter'],['Esc','esc'],['↑','up'],['↓','down'],['1','1'],['2','2'],['3','3']])
+  keyButton(label, () => send({keys:[key]}));
+const more = keyButton('…', () => more.classList.toggle('on', $('#keys').classList.toggle('all')));
+more.setAttribute('aria-label', 'その他のキー');
+for (const [label, key] of [['←','left'],['→','right'],['Tab','tab'],['⇧Tab','shift+tab'],['Space','space'],['⌫','backspace'],
+    ['4','4'],['y','y'],['n','n'],['^C','ctrl+c'],['^D','ctrl+d'],['^L','ctrl+l'],['^R','ctrl+r']])
+  keyButton(label, () => send({keys:[key]}), true);
 $('#form').onsubmit = e => {
   e.preventDefault();
   const v = $('#input').value;
@@ -228,11 +447,12 @@ $('#term').onpaste = e => { e.preventDefault(); const t = e.clipboardData.getDat
 async function loop(fn, ms) { try { await fn(); } finally { setTimeout(loop, ms, fn, ms); } }
 loop(async () => {
   if (document.hidden) return;
-  try { state = await api('/api/state'); render(); if ($('#err').dataset.net) { $('#err').textContent = ''; delete $('#err').dataset.net; } }
-  catch (e) { $('#err').textContent = '接続エラー: ' + e.message; $('#err').dataset.net = 1; }
+  try { state = await api('/api/state'); $('#offline').hidden = true; render(); }
+  catch (e) { $('#offline').textContent = `⚠ 接続が切れています。再接続中… (${e.message})`; $('#offline').hidden = false; }
 }, 2000);
 loop(readPane, 1000);
-show(); render();
+loop(readHistory, 1500);
+setFont(fontSize); show();
 </script>
 </body>
 </html>

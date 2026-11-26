@@ -10,7 +10,9 @@ uv run test_server.py        # テスト
 
 ## できること
 
-- workspace / tab / pane の一覧と agent の状態
+- pane の一覧と agent の状態(blocked を上に表示、agent のみに絞り込み可能)
+- 過去の履歴: Claude の会話は「履歴」タブで最初まで遡れます。shell は端末タブに直近 1000 行を表示し、「全履歴を取得」で herdr が保持する全行を読めます(取得中は herdr 側の表示がスクロールします)
+- PC では ⊞ で最大 4 pane の分割表示
 - 端末画面の表示と操作(入力欄、キーボタン、端末にフォーカスして直接入力)。Claude の質問や許可確認にもここから回答できます
 - Claude Code の subagent / shell / monitor の実行状態
 - Claude Code が公開した Artifact へのリンク

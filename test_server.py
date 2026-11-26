@@ -1,5 +1,22 @@
 """python3 test_server.py"""
+import server
 from server import Handler, Session, send
+
+# ip コマンドがない環境では ifconfig の出力から IP を取る
+real_run = server.subprocess.run
+
+
+def no_ip(args, **kwargs):
+    if args[0] == "ip":
+        raise FileNotFoundError("ip")
+    out = "lo0:\n\tinet 127.0.0.1 netmask 0xff000000\nen0:\n\tinet 192.168.1.7 netmask 0xffffff00\n"
+    return server.subprocess.CompletedProcess(args, 0, out, "")
+
+
+server.subprocess.run = no_ip
+fallback = server.own_ips()
+server.subprocess.run = real_run
+assert fallback == ["192.168.1.7"], fallback
 
 h = Handler.__new__(Handler)
 h.token = "secret"
@@ -41,4 +58,31 @@ for bad in [{}, {"pane": "-x", "text": "a"}, {"pane": "w1:p1", "keys": ["--help"
         pass
     else:
         raise AssertionError(bad)
+# 会話履歴: システム挿入文は除き、ページングできる
+s = Session(None)
+s.feed({"type": "user", "message": {"content": "hello"}})
+s.feed({"type": "user", "message": {"content": "<system-reminder>x</system-reminder>"}})
+s.feed({"type": "assistant", "message": {"content": [{"type": "text", "text": "hi"}]}})
+s.feed(use("z", "Bash", command="ls"))
+assert [i["role"] for i in s.log] == ["user", "assistant", "tool"], s.log
+assert (s.history(limit=2)["start"], s.history(before=1)["end"], len(s.history(after=2)["items"])) == (1, 1, 1)
+
+# 全履歴: スクロールしながら読んだ画面を重複なくつなぎ、位置を元に戻す
+buf = [str(n) for n in range(25)]
+pos = {"offset": 3}
+
+
+def fake_rpc(method, params):
+    if method == "pane.get":
+        return {"pane": {"scroll": {"viewport_rows": 10, "max_offset_from_bottom": 15, "offset_from_bottom": 3}}}
+    if method == "pane.scroll":
+        pos["offset"] = params["offset_from_bottom"]
+        return {}
+    end = len(buf) - pos["offset"]
+    return {"read": {"text": "\n".join(buf[end - 10:end])}}
+
+
+server.rpc = fake_rpc
+assert server.scrollback("w1:p1").split("\n") == buf
+assert pos["offset"] == 3
 print("ok")
